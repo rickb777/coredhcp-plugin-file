@@ -30,6 +30,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"sync"
 	"time"
@@ -51,8 +52,9 @@ var Plugin = plugins.Plugin{
 
 var (
 	//ntp6 dhcpv6.OptNTPServer
-	ntp4 dhcpv4.Option
-	mu4  sync.RWMutex // protect concurrent updates
+	ntp4   dhcpv4.Option
+	mu4    sync.RWMutex                 // protect concurrent updates
+	loops4 int64        = math.MaxInt64 // seam for testing
 )
 
 //-------------------------------------------------------------------------------------------------
@@ -158,16 +160,13 @@ func setup4(args ...string) (handler.Handler4, error) {
 	for _, arg := range args {
 		ip := net.ParseIP(arg)
 		if ip.To4() == nil {
-			return nil, fmt.Errorf("expected an NTP server IPv4 address, got %s", ip)
+			return nil, fmt.Errorf("expected an NTP server IPv4 address, got %s", arg)
 		}
 		ips = append(ips, ip)
 	}
 
 	log.Infof("loaded %d NTP servers: %v", len(ips), ips)
-
-	mu4.Lock()
-	defer mu4.Unlock()
-	ntp4 = dhcpv4.OptNTPServers(ips...)
+	setIPv4(ips)
 	return Handler4, nil
 }
 
@@ -176,6 +175,12 @@ func refresh(ttl time.Duration, host string) {
 		err := resolve(host)
 		if err != nil {
 			log.Warnf("lookup NTP ip4 server %q failed: %v", host, err)
+		}
+
+		// for testing, this goroutine exits early
+		loops4--
+		if loops4 <= 0 {
+			return
 		}
 	}
 }
@@ -187,10 +192,14 @@ func resolve(host string) error {
 	}
 
 	log.Infof("lookup NTP ip4 server %q = %v", host, ips)
-	mu4.Lock()
-	ntp4 = dhcpv4.OptNTPServers(ips...)
-	mu4.Unlock()
+	setIPv4(ips)
 	return nil
+}
+
+func setIPv4(ips []net.IP) {
+	mu4.Lock()
+	defer mu4.Unlock()
+	ntp4 = dhcpv4.OptNTPServers(ips...)
 }
 
 //-------------------------------------------------------------------------------------------------

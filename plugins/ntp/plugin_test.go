@@ -86,35 +86,69 @@ import (
 //	}
 //}
 
-func TestAddServer4(t *testing.T) {
-	req, err := dhcpv4.NewDiscovery(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff})
+func TestAddServer4WithIPs(t *testing.T) {
+	req, err := dhcpv4.NewDiscovery(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+		dhcpv4.WithRequestedOptions(dhcpv4.OptionNTPServers))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	stub, err := dhcpv4.NewReplyFromRequest(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ip1 := net.ParseIP("192.0.2.1")
-	ip2 := net.ParseIP("192.0.2.3")
-	ntp4 = dhcpv4.OptNTPServers(ip1, ip2)
+	h, err := setup4("192.0.2.1", "192.0.2.3")
 
-	resp, stop := Handler4(req, stub)
+	resp, stop := h(req, stub)
 	if resp == nil {
 		t.Fatal("plugin did not return a message")
 	}
 	if stop {
 		t.Error("plugin interrupted processing")
 	}
-	servers := resp.DNS()
+	servers := resp.NTPServers()
 	for i, srv := range servers {
 		if !srv.Equal(ntp4.Value.(dhcpv4.IPs)[i]) {
 			t.Errorf("Found server %s, expected %s", srv, ntp4.Value.(dhcpv4.IPs)[i])
 		}
 	}
 	if len(servers) != len(ntp4.Value.(dhcpv4.IPs)) {
-		//FIXME t.Errorf("Found %d servers, expected %d", len(servers), len(ntp4.Value.(dhcpv4.IPs)))
+		t.Errorf("Found %d servers, expected %d", len(servers), len(ntp4.Value.(dhcpv4.IPs)))
+	}
+}
+
+func TestAddServer4WithDomain(t *testing.T) {
+	req, err := dhcpv4.NewDiscovery(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+		dhcpv4.WithRequestedOptions(dhcpv4.OptionNTPServers))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stub, err := dhcpv4.NewReplyFromRequest(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loops4 = 3 // seam for testing
+
+	h, err := setup4("pool.ntp.org", "2s")
+
+	resp, stop := h(req, stub)
+	if resp == nil {
+		t.Fatal("plugin did not return a message")
+	}
+	if stop {
+		t.Error("plugin interrupted processing")
+	}
+	servers := resp.NTPServers()
+	for i, srv := range servers {
+		if !srv.Equal(ntp4.Value.(dhcpv4.IPs)[i]) {
+			t.Errorf("Found server %s, expected %s", srv, ntp4.Value.(dhcpv4.IPs)[i])
+		}
+	}
+	if len(servers) != len(ntp4.Value.(dhcpv4.IPs)) {
+		t.Errorf("Found %d servers, expected %d", len(servers), len(ntp4.Value.(dhcpv4.IPs)))
 	}
 }
 
