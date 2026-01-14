@@ -7,3 +7,5 @@ cmds/client/client
 cmds/coredhcp-generator/coredhcp-generator
 .vscode
 coverage.txt
+bin/
+.idea/
