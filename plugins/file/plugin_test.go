@@ -438,7 +438,7 @@ func TestSetupFile(t *testing.T) {
 		if assert.NoError(t, err) {
 			assert.Equal(t, 2, len(StaticRecords))
 		}
-		// We add more leases to the file -
+		// we add more leases to the file
 		// this should trigger an event to refresh the leases database
 		// without calling setupFile again.
 		// Note that the IPv6 address is uppercase (allowed but not best practice)
