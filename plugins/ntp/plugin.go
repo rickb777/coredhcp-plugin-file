@@ -30,10 +30,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coredhcp/coredhcp/handler"
@@ -53,9 +53,12 @@ var Plugin = plugins.Plugin{
 
 var (
 	//ntp6 dhcpv6.OptNTPServer
-	ntp4   dhcpv4.Option
-	mu4    sync.RWMutex                 // protect concurrent updates
-	loops4 int64        = math.MaxInt64 // seam for testing
+	ntp4 dhcpv4.Option
+	mu4  sync.RWMutex // protect concurrent updates
+
+	// seam for testing
+	loops4         atomic.Int64
+	minimumRefresh = time.Second
 )
 
 //-------------------------------------------------------------------------------------------------
@@ -150,7 +153,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 			return nil, fmt.Errorf("expected NTP settings to be a domain name and duration: %w", err)
 		}
 
-		if ttl >= time.Second { // ignore TTL less than 1s
+		if ttl >= minimumRefresh { // ignore TTL less than 100ms
 			go refreshIPv4(ttl, args[0])
 		}
 		return Handler4, nil
@@ -179,8 +182,7 @@ func refreshIPv4(ttl time.Duration, host string) {
 		}
 
 		// for testing, this goroutine can exit early (otherwise it runs for eons)
-		loops4--
-		if loops4 <= 0 {
+		if loops4.Add(-1) <= 0 {
 			return
 		}
 	}

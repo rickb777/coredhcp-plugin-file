@@ -7,6 +7,7 @@ package ntp
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 )
@@ -86,6 +87,22 @@ import (
 //	}
 //}
 
+func TestAddServer4ButWithBadIPs(t *testing.T) {
+	errorCases := [][]string{
+		{},
+		{"192.A.B.1"},
+		{"1.1.1.1", "192.A.B.1"},
+		{"ntp.org", "foo"},
+	}
+
+	for _, c := range errorCases {
+		_, err := setup4(c...)
+		if err == nil {
+			t.Errorf("expected error for %v", c)
+		}
+	}
+}
+
 func TestAddServer4WithIPs(t *testing.T) {
 	req, err := dhcpv4.NewDiscovery(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
 		dhcpv4.WithRequestedOptions(dhcpv4.OptionNTPServers))
@@ -130,9 +147,10 @@ func TestAddServer4WithDomain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loops4 = 3 // seam for testing
+	loops4.Store(2)    // seam for testing
+	minimumRefresh = 0 // which avoids extra channels etc just for testing
 
-	h, err := setup4("pool.ntp.org", "2s")
+	h, err := setup4("pool.ntp.org", "100ms")
 
 	resp, stop := h(req, stub)
 	if resp == nil {
@@ -149,6 +167,14 @@ func TestAddServer4WithDomain(t *testing.T) {
 	}
 	if len(servers) != len(ntp4.Value.(dhcpv4.IPs)) {
 		t.Errorf("Found %d servers, expected %d", len(servers), len(ntp4.Value.(dhcpv4.IPs)))
+	}
+
+	// using a polling loop because we don't want to extend more test code into the plugin
+	for tries := 0; tries < 20 && loops4.Load() > 0; tries++ {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if loops4.Load() > 0 {
+		t.Errorf("expected loop counter to have reached zero, not %d", loops4.Load())
 	}
 }
 
