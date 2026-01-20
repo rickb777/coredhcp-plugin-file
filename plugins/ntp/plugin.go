@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -142,7 +143,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 
 	if len(args) == 2 && net.ParseIP(args[0]) == nil && net.ParseIP(args[1]) == nil {
 		// try <domainName> <ttl>
-		e1 := resolve(args[0])
+		e1 := resolveIPv4(args[0])
 		ttl, e2 := time.ParseDuration(args[1])
 		if e1 != nil || e2 != nil {
 			err := errors.Join(e1, e2)
@@ -150,7 +151,7 @@ func setup4(args ...string) (handler.Handler4, error) {
 		}
 
 		if ttl >= time.Second { // ignore TTL less than 1s
-			go refresh(ttl, args[0])
+			go refreshIPv4(ttl, args[0])
 		}
 		return Handler4, nil
 	}
@@ -165,19 +166,19 @@ func setup4(args ...string) (handler.Handler4, error) {
 		ips = append(ips, ip)
 	}
 
-	log.Infof("loaded %d NTP servers: %v", len(ips), ips)
+	log.Infof("Loaded %d NTP servers: %v", len(ips), ips)
 	setIPv4(ips)
 	return Handler4, nil
 }
 
-func refresh(ttl time.Duration, host string) {
+func refreshIPv4(ttl time.Duration, host string) {
 	for range time.Tick(ttl) {
-		err := resolve(host)
+		err := resolveIPv4(host)
 		if err != nil {
-			log.Warnf("lookup NTP ip4 server %q failed: %v", host, err)
+			log.Warnf("Resolve NTP IPv4 server %s failed: %v", host, err)
 		}
 
-		// for testing, this goroutine exits early
+		// for testing, this goroutine can exit early (otherwise it runs for eons)
 		loops4--
 		if loops4 <= 0 {
 			return
@@ -185,13 +186,13 @@ func refresh(ttl time.Duration, host string) {
 	}
 }
 
-func resolve(host string) error {
+func resolveIPv4(host string) error {
 	ips, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", host)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("lookup NTP ip4 server %q = %v", host, ips)
+	log.Infof("Resolve NTP IPv4 server %s = %v", host, joinStringers(ips, ", "))
 	setIPv4(ips)
 	return nil
 }
@@ -202,6 +203,14 @@ func setIPv4(ips []net.IP) {
 	ntp4 = dhcpv4.OptNTPServers(ips...)
 }
 
+func joinStringers[T fmt.Stringer](v []T, sep string) string {
+	ss := make([]string, len(v))
+	for i, x := range v {
+		ss[i] = x.String()
+	}
+	return strings.Join(ss, sep)
+}
+
 //-------------------------------------------------------------------------------------------------
 
 // Handler4 handles DHCPv4 packets for the ntp plugin
@@ -209,6 +218,8 @@ func Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
 	if req.IsOptionRequested(dhcpv4.OptionNTPServers) {
 		mu4.RLock()
 		defer mu4.RUnlock()
+		log.Infof("MAC address %s given NTP servers %s", req.ClientHWAddr,
+			joinStringers(ntp4.Value.(dhcpv4.IPs), ", "))
 		resp.Options.Update(ntp4)
 	}
 	return resp, false
