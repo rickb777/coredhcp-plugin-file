@@ -5,7 +5,6 @@
 package rangeplugin
 
 import (
-	"database/sql"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -29,10 +28,10 @@ var Plugin = plugins.Plugin{
 	Setup4: setupRange,
 }
 
-//Record holds an IP lease record
+// Record holds an IP lease record
 type Record struct {
-	IP      net.IP
-	expires int
+	IP       net.IP
+	expires  int
 	hostname string
 }
 
@@ -43,7 +42,7 @@ type PluginState struct {
 	// Recordsv4 holds a MAC -> IP address and lease time mapping
 	Recordsv4 map[string]*Record
 	LeaseTime time.Duration
-	leasedb   *sql.DB
+	leasedb   any // *sql.DB for cgo or *bbolt.DB for pure-Go
 	allocator allocators.Allocator
 }
 
@@ -67,11 +66,11 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 			return nil, true
 		}
 		rec := Record{
-			IP:      ip.IP.To4(),
-			expires: int(time.Now().Add(p.LeaseTime).Unix()),
+			IP:       ip.IP.To4(),
+			expires:  int(time.Now().Add(p.LeaseTime).Unix()),
 			hostname: hostname,
 		}
-		err = p.saveIPAddress(req.ClientHWAddr, &rec)
+		err = saveIPAddress(p.leasedb, req.ClientHWAddr, &rec)
 		if err != nil {
 			log.Errorf("SaveIPAddress for MAC %s failed: %v", req.ClientHWAddr.String(), err)
 		}
@@ -83,7 +82,7 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 		if expiry.Before(time.Now().Add(p.LeaseTime)) {
 			record.expires = int(time.Now().Add(p.LeaseTime).Round(time.Second).Unix())
 			record.hostname = hostname
-			err := p.saveIPAddress(req.ClientHWAddr, record)
+			err := saveIPAddress(p.leasedb, req.ClientHWAddr, record)
 			if err != nil {
 				log.Errorf("Could not persist lease for MAC %s: %v", req.ClientHWAddr.String(), err)
 			}
@@ -97,7 +96,7 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 
 func (p *PluginState) handleRelease(req, _ *dhcpv4.DHCPv4, record *Record) (*dhcpv4.DHCPv4, bool) {
 	// Remove lease from storage
-	if freeErr := p.freeIPAddress(req.ClientHWAddr, record); freeErr != nil {
+	if freeErr := freeIPAddress(p.leasedb, req.ClientHWAddr, record); freeErr != nil {
 		log.Errorf("Could not remove lease from storage for MAC %s: %v", req.ClientHWAddr.String(), freeErr)
 		return nil, true
 	}
@@ -150,7 +149,12 @@ func setupRange(args ...string) (handler.Handler4, error) {
 		return nil, fmt.Errorf("invalid lease duration: %v", args[3])
 	}
 
-	if err := p.registerBackingDB(filename); err != nil {
+	if p.leasedb != nil {
+		return nil, errors.New("cannot swap out a lease database while running")
+	}
+
+	p.leasedb, err = loadDB(filename)
+	if err != nil {
 		return nil, fmt.Errorf("could not setup lease storage: %w", err)
 	}
 	p.Recordsv4, err = loadRecords(p.leasedb)

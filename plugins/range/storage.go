@@ -2,18 +2,20 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+//go:build cgo
+
 package rangeplugin
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"net"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func loadDB(path string) (*sql.DB, error) {
+func loadDB(path string) (any, error) {
+	// We never close this, but that's ok because plugins are never stopped/unregistered
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s", path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database (%T): %w", err, err)
@@ -27,7 +29,11 @@ func loadDB(path string) (*sql.DB, error) {
 // loadRecords loads the DHCPv6/v4 Records global map with records stored on
 // the specified file. The records have to be one per line, a mac address and an
 // IP address.
-func loadRecords(db *sql.DB) (map[string]*Record, error) {
+func loadRecords(db any) (map[string]*Record, error) {
+	return loadRecordsSQL(db.(*sql.DB))
+}
+
+func loadRecordsSQL(db *sql.DB) (map[string]*Record, error) {
 	rows, err := db.Query("select mac, ip, expiry, hostname from leases4")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query leases database: %w", err)
@@ -59,8 +65,12 @@ func loadRecords(db *sql.DB) (map[string]*Record, error) {
 }
 
 // saveIPAddress writes out a lease to storage
-func (p *PluginState) saveIPAddress(mac net.HardwareAddr, record *Record) error {
-	stmt, err := p.leasedb.Prepare(`insert or replace into leases4(mac, ip, expiry, hostname) values (?, ?, ?, ?)`)
+func saveIPAddress(leasedb any, mac net.HardwareAddr, record *Record) error {
+	return saveIPAddressSQL(leasedb.(*sql.DB), mac, record)
+}
+
+func saveIPAddressSQL(leasedb *sql.DB, mac net.HardwareAddr, record *Record) error {
+	stmt, err := leasedb.Prepare(`insert or replace into leases4(mac, ip, expiry, hostname) values (?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("statement preparation failed: %w", err)
 	}
@@ -77,8 +87,12 @@ func (p *PluginState) saveIPAddress(mac net.HardwareAddr, record *Record) error 
 }
 
 // freeIPAddress removes a lease from storage
-func (p *PluginState) freeIPAddress(mac net.HardwareAddr, record *Record) error {
-	stmt, err := p.leasedb.Prepare(`delete from leases4 where mac = ? and ip = ?`)
+func freeIPAddress(leasedb any, mac net.HardwareAddr, record *Record) error {
+	return freeIPAddressSQL(leasedb.(*sql.DB), mac, record)
+}
+
+func freeIPAddressSQL(leasedb *sql.DB, mac net.HardwareAddr, record *Record) error {
+	stmt, err := leasedb.Prepare(`delete from leases4 where mac = ? and ip = ?`)
 	if err != nil {
 		return fmt.Errorf("statement preparation failed: %w", err)
 	}
@@ -89,19 +103,5 @@ func (p *PluginState) freeIPAddress(mac net.HardwareAddr, record *Record) error 
 	); err != nil {
 		return fmt.Errorf("record delete failed: %w", err)
 	}
-	return nil
-}
-
-// registerBackingDB installs a database connection string as the backing store for leases
-func (p *PluginState) registerBackingDB(filename string) error {
-	if p.leasedb != nil {
-		return errors.New("cannot swap out a lease database while running")
-	}
-	// We never close this, but that's ok because plugins are never stopped/unregistered
-	newLeaseDB, err := loadDB(filename)
-	if err != nil {
-		return fmt.Errorf("failed to open lease database %s: %w", filename, err)
-	}
-	p.leasedb = newLeaseDB
 	return nil
 }
