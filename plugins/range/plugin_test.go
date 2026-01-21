@@ -192,15 +192,15 @@ func TestHandler4ReleaseStorageError(t *testing.T) {
 
 //-------------------------------------------------------------------------------------------------
 
-var expire = int(time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix())
+var expiry2000_01_01 = time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix()
 var records = []struct {
 	mac string
 	ip  *Record
 }{
-	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expire, hostname: "zero"}},
-	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expire, hostname: "one"}},
-	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expire, hostname: "two"}},
-	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expire, hostname: "three"}},
-	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expire, hostname: "four"}},
-	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expire, hostname: "five"}},
+	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expiry2000_01_01, hostname: "zero"}},
+	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expiry2000_01_01, hostname: "one"}},
+	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expiry2000_01_01, hostname: "two"}},
+	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expiry2000_01_01, hostname: "three"}},
+	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expiry2000_01_01, hostname: "four"}},
+	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expiry2000_01_01, hostname: "five"}},
 }
