@@ -2,6 +2,8 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+//go:build cgo
+
 package rangeplugin
 
 import (
@@ -15,10 +17,11 @@ import (
 )
 
 func testDBSetup() (*sql.DB, error) {
-	db, err := loadDB(":memory:")
+	h, err := loadDB(":memory:")
 	if err != nil {
 		return nil, err
 	}
+	db := h.(*sql.DB)
 	for _, record := range records {
 		stmt, err := db.Prepare("insert into leases4(mac, ip, expiry, hostname) values (?, ?, ?, ?)")
 		if err != nil {
@@ -72,8 +75,8 @@ func TestLoadRecords(t *testing.T) {
 }
 
 func TestWriteRecords(t *testing.T) {
-	pl := PluginState{}
-	if err := pl.registerBackingDB(":memory:"); err != nil {
+	db, err := loadDB(":memory:")
+	if err != nil {
 		t.Fatalf("Could not setup file")
 	}
 
@@ -84,13 +87,13 @@ func TestWriteRecords(t *testing.T) {
 			// bug in testdata
 			panic(err)
 		}
-		if err := pl.saveIPAddress(hwaddr, rec.ip); err != nil {
+		if err := saveIPAddress(db, hwaddr, rec.ip); err != nil {
 			t.Errorf("Failed to save ip for %s: %v", hwaddr, err)
 		}
 		mapRec[hwaddr.String()] = &Record{IP: rec.ip.IP, expires: rec.ip.expires, hostname: rec.ip.hostname}
 	}
 
-	parsedRec, err := loadRecords(pl.leasedb)
+	parsedRec, err := loadRecords(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +124,7 @@ func TestFreeIPAddress(t *testing.T) {
 	assert.True(t, exists, "Record should exist before deletion")
 
 	// Now free the IP address
-	if err := pl.freeIPAddress(hwaddr, record); err != nil {
+	if err := freeIPAddress(db, hwaddr, record); err != nil {
 		t.Errorf("Failed to free IP address: %v", err)
 	}
 
@@ -134,8 +137,8 @@ func TestFreeIPAddress(t *testing.T) {
 }
 
 func TestFreeIPAddressNonExistent(t *testing.T) {
-	pl := PluginState{}
-	if err := pl.registerBackingDB(":memory:"); err != nil {
+	db, err := loadDB(":memory:")
+	if err != nil {
 		t.Fatalf("Could not setup file")
 	}
 
@@ -150,10 +153,10 @@ func TestFreeIPAddressNonExistent(t *testing.T) {
 		hostname: "non-existent",
 	}
 
-	err = pl.freeIPAddress(hwaddr, record)
+	err = freeIPAddress(db, hwaddr, record)
 	assert.NoError(t, err, "Freeing a non-existent IP address should not return an error")
 
-	parsedRecords, err := loadRecords(pl.leasedb)
+	parsedRecords, err := loadRecords(db)
 	if err != nil {
 		t.Fatalf("Failed to load records: %v", err)
 	}
@@ -166,9 +169,7 @@ func TestFreeIPAddressVerifyDeletion(t *testing.T) {
 		t.Fatalf("Failed to set up test DB: %v", err)
 	}
 
-	pl := PluginState{leasedb: db}
-
-	parsedRecords, err := loadRecords(pl.leasedb)
+	parsedRecords, err := loadRecords(db)
 	if err != nil {
 		t.Fatalf("Failed to load records: %v", err)
 	}
@@ -178,11 +179,11 @@ func TestFreeIPAddressVerifyDeletion(t *testing.T) {
 	hwaddrToDelete, _ := net.ParseMAC(records[2].mac)
 	recordToDelete := records[2].ip
 
-	if err := pl.freeIPAddress(hwaddrToDelete, recordToDelete); err != nil {
+	if err := freeIPAddress(db, hwaddrToDelete, recordToDelete); err != nil {
 		t.Errorf("Failed to free IP address: %v", err)
 	}
 
-	parsedRecords, err = loadRecords(pl.leasedb)
+	parsedRecords, err = loadRecords(db)
 	if err != nil {
 		t.Fatalf("Failed to load records after deletion: %v", err)
 	}
@@ -224,8 +225,6 @@ func TestFreeIPAddressExecutionError(t *testing.T) {
 		t.Fatalf("Failed to create trigger: %v", err)
 	}
 
-	pl := PluginState{leasedb: db}
-
 	hwaddr, err := net.ParseMAC(records[0].mac)
 	if err != nil {
 		t.Fatalf("Failed to parse MAC address: %v", err)
@@ -233,7 +232,7 @@ func TestFreeIPAddressExecutionError(t *testing.T) {
 
 	record := records[0].ip
 
-	err = pl.freeIPAddress(hwaddr, record)
+	err = freeIPAddress(db, hwaddr, record)
 
 	assert.Error(t, err, "Should return error due to trigger preventing deletion")
 	assert.Contains(t, err.Error(), "record delete failed", "Error should indicate record delete failure")
