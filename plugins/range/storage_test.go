@@ -52,7 +52,7 @@ func TestLoadRecords(t *testing.T) {
 	for _, rec := range records {
 		var (
 			ip, mac, hostname string
-			expiry            int
+			expiry            int64
 		)
 		if err := db.QueryRow("select mac, ip, expiry, hostname from leases4 where mac = ?", rec.mac).Scan(&mac, &ip, &expiry, &hostname); err != nil {
 			t.Fatalf("record not found for mac=%s: %v", rec.mac, err)
@@ -135,7 +135,7 @@ func TestFreeIPAddressNonExistent(t *testing.T) {
 
 	record := &Record{
 		IP:       net.IPv4(10, 0, 0, 99),
-		expires:  expire,
+		expires:  expiry2000_01_01,
 		hostname: "non-existent",
 	}
 

@@ -20,27 +20,30 @@ func loadDB(path string) (io.Closer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", path, err)
 	}
-	//defer db.Close()
 	return db, nil
 }
 
-// loadRecords loads the DHCPv6/v4 Records global map with records stored on
-// the specified file. The records have to be one per line, a mac address and an
-// IP address.
+// loadRecords loads the DHCPv6/v4 Records global map with records stored in
+// the specified file.
+//
+// The bbolt DB behaves like a map of maps, i.e.
+//
+//	map[key]map[string]uint64
+//
+// where the key is composed of the concatenated MAC and IP addresses.
+// The key is used as the bucket name. Each bucket contains a hashtable
+// that maps hostnames to expiry times.
 func loadRecords(db any) (records map[string]*Record, err error) {
 	records = make(map[string]*Record)
 	err = db.(*bbolt.DB).View(func(tx *bbolt.Tx) error {
 		return tx.ForEach(func(bucketName []byte, b *bbolt.Bucket) error {
 			pk := keyOf(bucketName)
-			if err != nil {
-				return err
-			}
 			return b.ForEach(func(k, v []byte) error {
 				hostname := string(k)
 				expires := binary.LittleEndian.Uint64(v)
 				records[pk.hwaddr.String()] = &Record{
 					IP:       pk.ipaddr,
-					expires:  int(expires),
+					expires:  int64(expires),
 					hostname: hostname,
 				}
 				return nil

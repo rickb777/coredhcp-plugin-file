@@ -42,7 +42,7 @@ func loadRecordsSQL(db *sql.DB) (map[string]*Record, error) {
 	defer rows.Close()
 	var (
 		mac, ip, hostname string
-		expiry            int
+		expiry            int64
 		records           = make(map[string]*Record)
 	)
 	for rows.Next() {
