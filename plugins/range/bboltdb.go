@@ -9,12 +9,13 @@ package rangeplugin
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 
 	"go.etcd.io/bbolt"
 )
 
-func loadDB(path string) (any, error) {
+func loadDB(path string) (io.Closer, error) {
 	db, err := bbolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open %s: %w", path, err)

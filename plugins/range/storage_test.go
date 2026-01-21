@@ -9,50 +9,39 @@ package rangeplugin
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func testDBSetup() (*sql.DB, error) {
+func testDBSetup(t *testing.T) *sql.DB {
 	h, err := loadDB(":memory:")
 	if err != nil {
-		return nil, err
+		t.Fatalf("Failed to set up test DB: %v", err)
 	}
 	db := h.(*sql.DB)
 	for _, record := range records {
 		stmt, err := db.Prepare("insert into leases4(mac, ip, expiry, hostname) values (?, ?, ?, ?)")
 		if err != nil {
-			return nil, fmt.Errorf("failed to prepare insert statement: %w", err)
+			t.Fatalf("failed to prepare insert statement: %v", err)
 		}
 		defer stmt.Close()
 		if _, err := stmt.Exec(record.mac, record.ip.IP.String(), record.ip.expires, record.ip.hostname); err != nil {
-			return nil, fmt.Errorf("failed to insert record into test db: %w", err)
+			t.Fatalf("failed to insert record into test db: %v", err)
 		}
 	}
-	return db, nil
+	return db
 }
 
-var expire = int(time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix())
-var records = []struct {
-	mac string
-	ip  *Record
-}{
-	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expire, hostname: "zero"}},
-	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expire, hostname: "one"}},
-	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expire, hostname: "two"}},
-	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expire, hostname: "three"}},
-	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expire, hostname: "four"}},
-	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expire, hostname: "five"}},
+func testDBCleanup(db io.Closer) {
+	db.Close()
 }
 
 func TestLoadRecords(t *testing.T) {
-	db, err := testDBSetup()
-	if err != nil {
-		t.Fatalf("Failed to set up test DB: %v", err)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	parsedRec, err := loadRecords(db)
 	if err != nil {
@@ -75,10 +64,8 @@ func TestLoadRecords(t *testing.T) {
 }
 
 func TestWriteRecords(t *testing.T) {
-	db, err := loadDB(":memory:")
-	if err != nil {
-		t.Fatalf("Could not setup file")
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	mapRec := make(map[string]*Record)
 	for _, rec := range records {
@@ -102,10 +89,8 @@ func TestWriteRecords(t *testing.T) {
 }
 
 func TestFreeIPAddress(t *testing.T) {
-	db, err := testDBSetup()
-	if err != nil {
-		t.Fatalf("Failed to set up test DB: %v", err)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	pl := PluginState{leasedb: db}
 
@@ -141,6 +126,7 @@ func TestFreeIPAddressNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not setup file")
 	}
+	defer db.Close()
 
 	hwaddr, err := net.ParseMAC("02:00:00:00:00:99")
 	if err != nil {
@@ -164,10 +150,8 @@ func TestFreeIPAddressNonExistent(t *testing.T) {
 }
 
 func TestFreeIPAddressVerifyDeletion(t *testing.T) {
-	db, err := testDBSetup()
-	if err != nil {
-		t.Fatalf("Failed to set up test DB: %v", err)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	parsedRecords, err := loadRecords(db)
 	if err != nil {
@@ -204,11 +188,8 @@ func TestFreeIPAddressExecutionError(t *testing.T) {
 	// This test triggers a statement execution failure using a SQLite trigger
 	// that aborts DELETE operations for records[0]
 
-	db, err := testDBSetup()
-	if err != nil {
-		t.Fatalf("Failed to set up test database: %v", err)
-	}
-	defer db.Close()
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	const triggerErrorMsg = "Custom deletion prevention trigger"
 	// Create a trigger that will cause DELETE operations to fail for records[0]
@@ -220,7 +201,7 @@ func TestFreeIPAddressExecutionError(t *testing.T) {
 			SELECT RAISE(ABORT, '%s');
 		END
 	`, records[0].mac, triggerErrorMsg)
-	_, err = db.Exec(triggerSQL)
+	_, err := db.Exec(triggerSQL)
 	if err != nil {
 		t.Fatalf("Failed to create trigger: %v", err)
 	}
