@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/stretchr/testify/assert"
@@ -43,10 +44,8 @@ func (m *mockFailingAllocator) Free(ip net.IPNet) error {
 }
 
 func TestHandler4Release(t *testing.T) {
-	db, dbErr := testDBSetup()
-	if dbErr != nil {
-		t.Fatalf("Failed to set up test DB: %v", dbErr)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	mockAlloc := &mockAllocator{}
 
@@ -99,10 +98,8 @@ func TestHandler4Release(t *testing.T) {
 }
 
 func TestHandler4ReleaseAllocatorError(t *testing.T) {
-	db, parseErr := testDBSetup()
-	if parseErr != nil {
-		t.Fatalf("Failed to set up test DB: %v", parseErr)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	mockAlloc := &mockFailingAllocator{}
 
@@ -153,10 +150,8 @@ func TestHandler4ReleaseAllocatorError(t *testing.T) {
 }
 
 func TestHandler4ReleaseStorageError(t *testing.T) {
-	db, parseErr := testDBSetup()
-	if parseErr != nil {
-		t.Fatalf("Failed to set up test DB: %v", parseErr)
-	}
+	db := testDBSetup(t)
+	defer testDBCleanup(db)
 
 	mockAlloc := &mockAllocator{}
 
@@ -193,4 +188,19 @@ func TestHandler4ReleaseStorageError(t *testing.T) {
 
 	mockAlloc.AssertNotCalled(t, "Free")
 	mockAlloc.AssertNotCalled(t, "Allocate")
+}
+
+//-------------------------------------------------------------------------------------------------
+
+var expire = int(time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix())
+var records = []struct {
+	mac string
+	ip  *Record
+}{
+	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expire, hostname: "zero"}},
+	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expire, hostname: "one"}},
+	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expire, hostname: "two"}},
+	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expire, hostname: "three"}},
+	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expire, hostname: "four"}},
+	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expire, hostname: "five"}},
 }

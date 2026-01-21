@@ -9,12 +9,13 @@ package rangeplugin
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func loadDB(path string) (any, error) {
+func loadDB(path string) (io.Closer, error) {
 	// We never close this, but that's ok because plugins are never stopped/unregistered
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s", path))
 	if err != nil {
