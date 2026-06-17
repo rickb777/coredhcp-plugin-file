@@ -5,6 +5,7 @@
 package rangeplugin
 
 import (
+	"database/sql"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -42,7 +43,7 @@ type PluginState struct {
 	// Recordsv4 holds a MAC -> IP address and lease time mapping
 	Recordsv4 map[string]*Record
 	LeaseTime time.Duration
-	leasedb   any // *sql.DB for cgo or *bbolt.DB for pure-Go
+	leasedb   *sql.DB
 	allocator allocators.Allocator
 }
 
@@ -75,7 +76,7 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 			expires:  endOfLease.Unix(),
 			hostname: hostname,
 		}
-		err = saveIPAddress(p.leasedb, req.ClientHWAddr, &rec)
+		err = p.saveIPAddress(req.ClientHWAddr, &rec)
 		if err != nil {
 			log.Errorf("SaveIPAddress for MAC %s failed: %v", req.ClientHWAddr.String(), err)
 		}
@@ -83,11 +84,11 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 		record = &rec
 	} else {
 		// Ensure we extend the existing lease at least past when the one we're giving expires
-		expiry := time.Unix(record.expires, 0)
-		if expiry.Before(endOfLease) {
+		expiry := time.Unix(int64(record.expires), 0)
+		if expiry.Before(time.Now().Add(p.LeaseTime)) {
 			record.expires = endOfLease.Round(time.Second).Unix()
 			record.hostname = hostname
-			err := saveIPAddress(p.leasedb, req.ClientHWAddr, record)
+			err := p.saveIPAddress(req.ClientHWAddr, record)
 			if err != nil {
 				log.Errorf("Could not persist lease for MAC %s: %v", req.ClientHWAddr.String(), err)
 			}
@@ -101,7 +102,7 @@ func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) 
 
 func (p *PluginState) handleRelease(req, _ *dhcpv4.DHCPv4, record *Record) (*dhcpv4.DHCPv4, bool) {
 	// Remove lease from storage
-	if freeErr := freeIPAddress(p.leasedb, req.ClientHWAddr, record); freeErr != nil {
+	if freeErr := p.freeIPAddress(req.ClientHWAddr, record); freeErr != nil {
 		log.Errorf("Could not remove lease from storage for MAC %s: %v", req.ClientHWAddr.String(), freeErr)
 		return nil, true
 	}
@@ -154,12 +155,7 @@ func setupRange(args ...string) (handler.Handler4, error) {
 		return nil, fmt.Errorf("invalid lease duration: %v", args[3])
 	}
 
-	if p.leasedb != nil {
-		return nil, errors.New("cannot swap out a lease database while running")
-	}
-
-	p.leasedb, err = loadDB(filename)
-	if err != nil {
+	if err := p.registerBackingDB(filename); err != nil {
 		return nil, fmt.Errorf("could not setup lease storage: %w", err)
 	}
 	p.Recordsv4, err = loadRecords(p.leasedb)

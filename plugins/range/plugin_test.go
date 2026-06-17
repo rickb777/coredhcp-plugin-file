@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/stretchr/testify/assert"
@@ -44,8 +43,10 @@ func (m *mockFailingAllocator) Free(ip net.IPNet) error {
 }
 
 func TestHandler4Release(t *testing.T) {
-	db := testDBSetup(t)
-	defer testDBCleanup(db)
+	db, dbErr := testDBSetup()
+	if dbErr != nil {
+		t.Fatalf("Failed to set up test DB: %v", dbErr)
+	}
 
 	mockAlloc := &mockAllocator{}
 
@@ -98,8 +99,10 @@ func TestHandler4Release(t *testing.T) {
 }
 
 func TestHandler4ReleaseAllocatorError(t *testing.T) {
-	db := testDBSetup(t)
-	defer testDBCleanup(db)
+	db, parseErr := testDBSetup()
+	if parseErr != nil {
+		t.Fatalf("Failed to set up test DB: %v", parseErr)
+	}
 
 	mockAlloc := &mockFailingAllocator{}
 
@@ -150,8 +153,10 @@ func TestHandler4ReleaseAllocatorError(t *testing.T) {
 }
 
 func TestHandler4ReleaseStorageError(t *testing.T) {
-	db := testDBSetup(t)
-	defer testDBCleanup(db)
+	db, parseErr := testDBSetup()
+	if parseErr != nil {
+		t.Fatalf("Failed to set up test DB: %v", parseErr)
+	}
 
 	mockAlloc := &mockAllocator{}
 
@@ -192,15 +197,15 @@ func TestHandler4ReleaseStorageError(t *testing.T) {
 
 //-------------------------------------------------------------------------------------------------
 
-var expiry2000_01_01 = time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix()
-var records = []struct {
-	mac string
-	ip  *Record
-}{
-	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expiry2000_01_01, hostname: "zero"}},
-	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expiry2000_01_01, hostname: "one"}},
-	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expiry2000_01_01, hostname: "two"}},
-	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expiry2000_01_01, hostname: "three"}},
-	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expiry2000_01_01, hostname: "four"}},
-	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expiry2000_01_01, hostname: "five"}},
-}
+//var expiry2000_01_01 = time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix()
+//var records = []struct {
+//	mac string
+//	ip  *Record
+//}{
+//	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expiry2000_01_01, hostname: "zero"}},
+//	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expiry2000_01_01, hostname: "one"}},
+//	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expiry2000_01_01, hostname: "two"}},
+//	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expiry2000_01_01, hostname: "three"}},
+//	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expiry2000_01_01, hostname: "four"}},
+//	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expiry2000_01_01, hostname: "five"}},
+//}
