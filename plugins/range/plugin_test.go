@@ -194,18 +194,3 @@ func TestHandler4ReleaseStorageError(t *testing.T) {
 	mockAlloc.AssertNotCalled(t, "Free")
 	mockAlloc.AssertNotCalled(t, "Allocate")
 }
-
-//-------------------------------------------------------------------------------------------------
-
-//var expiry2000_01_01 = time.Date(2000, 01, 01, 00, 00, 00, 00, time.UTC).Unix()
-//var records = []struct {
-//	mac string
-//	ip  *Record
-//}{
-//	{"02:00:00:00:00:00", &Record{IP: net.IPv4(10, 0, 0, 0), expires: expiry2000_01_01, hostname: "zero"}},
-//	{"02:00:00:00:00:01", &Record{IP: net.IPv4(10, 0, 0, 1), expires: expiry2000_01_01, hostname: "one"}},
-//	{"02:00:00:00:00:02", &Record{IP: net.IPv4(10, 0, 0, 2), expires: expiry2000_01_01, hostname: "two"}},
-//	{"02:00:00:00:00:03", &Record{IP: net.IPv4(10, 0, 0, 3), expires: expiry2000_01_01, hostname: "three"}},
-//	{"02:00:00:00:00:04", &Record{IP: net.IPv4(10, 0, 0, 4), expires: expiry2000_01_01, hostname: "four"}},
-//	{"02:00:00:00:00:05", &Record{IP: net.IPv4(10, 0, 0, 5), expires: expiry2000_01_01, hostname: "five"}},
-//}
