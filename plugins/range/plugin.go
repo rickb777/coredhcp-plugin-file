@@ -48,6 +48,9 @@ type PluginState struct {
 
 // Handler4 handles DHCPv4 packets for the range plugin
 func (p *PluginState) Handler4(req, resp *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, bool) {
+	if req.MessageType() == dhcpv4.MessageTypeInform {
+		return resp, false
+	}
 	p.Lock()
 	defer p.Unlock()
 	record, ok := p.Recordsv4[req.ClientHWAddr.String()]
