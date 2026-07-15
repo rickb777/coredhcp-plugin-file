@@ -116,6 +116,9 @@ func TestAddServer4WithIPs(t *testing.T) {
 	}
 
 	h, err := setup4("192.0.2.1", "192.0.2.3")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resp, stop := h(req, stub)
 	if resp == nil {
@@ -151,6 +154,9 @@ func TestAddServer4WithDomain(t *testing.T) {
 	minimumRefresh = 0 // which avoids extra channels etc just for testing
 
 	h, err := setup4("pool.ntp.org", "100ms")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resp, stop := h(req, stub)
 	if resp == nil {
