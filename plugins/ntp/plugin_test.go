@@ -166,6 +166,7 @@ func TestAddServer4WithDomain(t *testing.T) {
 		t.Error("plugin interrupted processing")
 	}
 	servers := resp.NTPServers()
+	mu4.RLock()
 	for i, srv := range servers {
 		if !srv.Equal(ntp4.Value.(dhcpv4.IPs)[i]) {
 			t.Errorf("Found server %s, expected %s", srv, ntp4.Value.(dhcpv4.IPs)[i])
@@ -174,6 +175,7 @@ func TestAddServer4WithDomain(t *testing.T) {
 	if len(servers) != len(ntp4.Value.(dhcpv4.IPs)) {
 		t.Errorf("Found %d servers, expected %d", len(servers), len(ntp4.Value.(dhcpv4.IPs)))
 	}
+	mu4.RUnlock()
 
 	// using a polling loop because we don't want to extend more test code into the plugin
 	for tries := 0; tries < 20 && loops4.Load() > 0; tries++ {
